@@ -104,6 +104,7 @@ function bindDragDrop(){
 
 // --- Webcam capture logic ---
 async function startWebcam() {
+  console.log("addpeople.js: startWebcam() called, requesting camera stream");
   try {
     // Try to get stream with ideal constraints first
     try {
@@ -197,6 +198,7 @@ function syncFilesToInput() {
 
 // --- Initialization ---
 function init() {
+  console.log("addpeople.js: init() executing");
   updateCount(existingCount);
   updateButtons(existingCount);
 
@@ -206,6 +208,7 @@ function init() {
 
   // Webcam button events
   startWebcamBtn.addEventListener('click', () => {
+    console.log("addpeople.js: start-webcam-btn clicked");
     if (webcamStream) {
       stopWebcam();
     } else {
