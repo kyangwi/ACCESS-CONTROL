@@ -186,7 +186,13 @@ def get_people(request):
         images = [f for f in os.listdir(person_dir) if allowed_file(f)]
         if images:
             avatar_path = f'/static/facedata/{name}/{images[0]}'
-            people.append({'id': name, 'name': name, 'avatar': avatar_path})
+            all_avatars = [f'/static/facedata/{name}/{img}' for img in images]
+            people.append({
+                'id': name,
+                'name': name,
+                'avatar': avatar_path,
+                'all_avatars': all_avatars
+            })
 
     return JsonResponse(people, safe=False)
 

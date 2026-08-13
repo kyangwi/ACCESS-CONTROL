@@ -259,12 +259,22 @@ function renderPeople(list) {
 
     details.append(info, btn);
 
-    const avatar = document.createElement('img');
-    avatar.className = 'avatar';
-    avatar.src = person.avatar;
-    avatar.alt = person.name;
+    card.append(details);
 
-    card.append(details, avatar);
+    // Render gallery of all pictures for this person on the right
+    if (person.all_avatars && person.all_avatars.length > 0) {
+      const gallery = document.createElement('div');
+      gallery.className = 'person-images-gallery';
+      person.all_avatars.forEach(url => {
+        const img = document.createElement('img');
+        img.className = 'person-gallery-thumb';
+        img.src = url;
+        img.alt = person.name;
+        gallery.appendChild(img);
+      });
+      card.appendChild(gallery);
+    }
+
     peopleListEl.append(card);
   });
 

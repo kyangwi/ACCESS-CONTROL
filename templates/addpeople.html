@@ -76,23 +76,8 @@
     </header>
 
     <div class="my_body">
-      <div class="container">
-        <div class="header-inline">
-          <div class="header-left">
-            <h2>Registered Personnel</h2>
-            <p class="subtitle">Manage and delete enrolled system users</p>
-          </div>
-          <div class="header-right">
-            <div class="search-input-wrapper">
-              <i class="bi bi-search search-icon"></i>
-              <input type="text" id="searchInput" placeholder="Search people..." />
-            </div>
-          </div>
-        </div>
-        <section class="people-list" id="peopleList"></section>
-      </div>
-
-      <div class="right-pane">
+      <!-- Left Pane: Enrollment Form & Stats -->
+      <div class="left-pane">
         <section class="stats">
           <div class="card stats-card">
             <div class="stat-number" id="totalUsers">0</div>
@@ -157,6 +142,23 @@
             </div>
           </form>
         </div>
+      </div>
+
+      <!-- Right Pane: Registered Personnel List -->
+      <div class="container">
+        <div class="header-inline">
+          <div class="header-left">
+            <h2>Registered Personnel</h2>
+            <p class="subtitle">Manage and delete enrolled system users</p>
+          </div>
+          <div class="header-right">
+            <div class="search-input-wrapper">
+              <i class="bi bi-search search-icon"></i>
+              <input type="text" id="searchInput" placeholder="Search people..." />
+            </div>
+          </div>
+        </div>
+        <section class="people-list" id="peopleList"></section>
       </div>
     </div>
   </main>

@@ -162,7 +162,7 @@ body {
 /* Page Body Layout */
 .my_body {
     display: grid;
-    grid-template-columns: 1.5fr 1fr;
+    grid-template-columns: 1fr 1.5fr;
     gap: 24px;
     padding: 24px 2.5rem;
     align-items: start;
@@ -216,7 +216,7 @@ body {
     border-color: var(--blue);
 }
 
-.right-pane {
+.left-pane {
     display: flex;
     flex-direction: column;
     gap: 24px;
@@ -573,6 +573,29 @@ body {
     border-radius: 6px;
     object-fit: cover;
     border: 1px solid #2d3748;
+}
+
+.person-images-gallery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-width: 400px;
+    justify-content: flex-end;
+}
+
+.person-gallery-thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: 4px;
+    object-fit: cover;
+    border: 1px solid #2d3748;
+    transition: transform 0.2s, border-color 0.2s;
+}
+
+.person-gallery-thumb:hover {
+    transform: scale(1.2);
+    border-color: var(--blue);
+    z-index: 10;
 }
 
 /* Toast styling */
