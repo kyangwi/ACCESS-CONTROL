@@ -120,6 +120,7 @@ async function startWebcam() {
     }
 
     enrollVideo.srcObject = webcamStream;
+    enrollVideo.play().catch(e => console.warn('Webcam play trigger error:', e));
     webcamOverlay.style.display = 'none';
     snapBtn.style.display = 'inline-flex';
     startWebcamBtn.innerHTML = '<i class="bi bi-stop-fill"></i> Stop Camera';
@@ -195,7 +196,7 @@ function syncFilesToInput() {
 }
 
 // --- Initialization ---
-document.addEventListener('DOMContentLoaded', () => {
+function init() {
   updateCount(existingCount);
   updateButtons(existingCount);
 
@@ -229,7 +230,13 @@ document.addEventListener('DOMContentLoaded', () => {
                  el.classList.contains('alert-warning') ? 'warning' : 'info';
     showToast(el.textContent, type);
   });
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
 
 // --- Registered Users List logic ---
 const peopleListEl = document.getElementById('peopleList');
