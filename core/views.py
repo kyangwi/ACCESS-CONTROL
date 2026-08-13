@@ -25,6 +25,8 @@ from database import (
     get_recent_incidents,
     save_incident,
     get_all_incidents,
+    search_records,
+    get_calendar_stats,
 )
 
 # ---------------------------------------------------------------------------
@@ -509,3 +511,126 @@ def get_data(request):
     # track_info is already a reference to _track_infos[camera_id],
     # so in-place mutations above are persisted automatically.
     return JsonResponse(results, safe=False)
+
+
+def search_page(request):
+    try:
+        q = request.GET.get('q', '').strip()
+        status = request.GET.get('status', 'all').strip()
+        start_date = request.GET.get('start_date', '').strip()
+        end_date = request.GET.get('end_date', '').strip()
+
+        records = search_records(
+            name_query=q if q else None,
+            status_filter=status if status else None,
+            start_date=start_date if start_date else None,
+            end_date=end_date if end_date else None
+        )
+
+        for i, rec in enumerate(records):
+            parts = rec['Timestamp'].split(' ')
+            rec['date_only'] = parts[0] if len(parts) > 0 else ''
+            rec['time_only'] = parts[1] if len(parts) > 1 else ''
+            rec['confidence_pct'] = round(rec['Confidence'] * 100, 1)
+            rec['reference_id'] = f"F{500 + i + 1}E"
+
+        return render(request, 'search.html', {
+            'records': records,
+            'query_q': q,
+            'query_status': status,
+            'query_start_date': start_date,
+            'query_end_date': end_date,
+        })
+    except Exception as e:
+        print(f"Error in search_page: {e}")
+        return HttpResponse("Server Error", status=500)
+
+
+def calendar_page(request):
+    try:
+        now = datetime.now()
+        year = int(request.GET.get('year', now.year))
+        month = int(request.GET.get('month', now.month))
+
+        # Clamp year and month to reasonable limits
+        if month < 1 or month > 12:
+            month = now.month
+        if year < 2020 or year > 2040:
+            year = now.year
+
+        # Get monthly calendar stats from db
+        stats = get_calendar_stats(year, month)
+
+        # Generate calendar days list for the monthly grid
+        import calendar as pycal
+        cal_obj = pycal.Calendar(firstweekday=6) # Start weeks on Sunday
+        month_weeks_raw = cal_obj.monthdayscalendar(year, month)
+
+        month_weeks = []
+        for week in month_weeks_raw:
+            week_days = []
+            for day in week:
+                if day == 0:
+                    week_days.append({'day': None})
+                else:
+                    day_stats = stats.get(day, {'detections': 0, 'incidents': 0})
+                    week_days.append({
+                        'day': day,
+                        'detections': day_stats['detections'],
+                        'incidents': day_stats['incidents']
+                    })
+            month_weeks.append(week_days)
+
+        # Names of months
+        month_name = pycal.month_name[month]
+
+        # Calculate next/prev months/years
+        prev_month = month - 1 if month > 1 else 12
+        prev_year = year if month > 1 else year - 1
+        next_month = month + 1 if month < 12 else 1
+        next_year = year if month < 12 else year + 1
+
+        return render(request, 'calendar.html', {
+            'weeks': month_weeks,
+            'year': year,
+            'month': month,
+            'month_name': month_name,
+            'prev_month': prev_month,
+            'prev_year': prev_year,
+            'next_month': next_month,
+            'next_year': next_year,
+        })
+    except Exception as e:
+        print(f"Error in calendar_page: {e}")
+        return HttpResponse("Server Error", status=500)
+
+
+def calendar_details_api(request):
+    try:
+        date_str = request.GET.get('date', '').strip() # e.g. "2026-08-13"
+        if not date_str:
+            return JsonResponse({'success': False, 'error': 'Missing date parameter'}, status=400)
+
+        # Query all records on that date
+        records = search_records(start_date=date_str, end_date=date_str)
+        
+        # Serialize records
+        serialized_records = []
+        for i, rec in enumerate(records):
+            parts = rec['Timestamp'].split(' ')
+            serialized_records.append({
+                'name': rec['Name'],
+                'confidence_pct': round(rec['Confidence'] * 100, 1),
+                'status': rec['Status'].capitalize(),
+                'time': parts[1] if len(parts) > 1 else '',
+                'date': parts[0] if len(parts) > 0 else '',
+                'reference_id': f"F{500 + i + 1}E"
+            })
+
+        return JsonResponse({
+            'success': True,
+            'date': date_str,
+            'records': serialized_records
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

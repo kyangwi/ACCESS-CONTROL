@@ -187,3 +187,84 @@ def get_all_incidents():
         'description': row[2],
         'timestamp': row[3]
     } for row in results]
+
+
+def search_records(name_query=None, status_filter=None, start_date=None, end_date=None):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    query = "SELECT Name, Confidence, BoundingBox, Status, Timestamp FROM FaceRecords WHERE 1=1"
+    params = []
+    
+    if name_query:
+        query += " AND Name LIKE ?"
+        params.append(f"%{name_query}%")
+        
+    if status_filter and status_filter != 'all':
+        query += " AND Status = ?"
+        params.append(status_filter.lower())
+        
+    if start_date:
+        query += " AND Timestamp >= ?"
+        params.append(f"{start_date} 00:00:00")
+        
+    if end_date:
+        query += " AND Timestamp <= ?"
+        params.append(f"{end_date} 23:59:59")
+        
+    query += " ORDER BY Timestamp DESC"
+    cur.execute(query, params)
+    rows = cur.fetchall()
+    conn.close()
+    
+    records = []
+    for row in rows:
+        rec = dict(row)
+        rec['Confidence'] = round(rec['Confidence'], 2)
+        records.append(rec)
+    return records
+
+
+def get_calendar_stats(year, month):
+    # Year-month prefix: e.g. "2026-08"
+    prefix = f"{year:04d}-{month:02d}-"
+    
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    # Query FaceRecords
+    cur.execute(
+        "SELECT substr(Timestamp, 9, 2) as day, COUNT(*) as cnt "
+        "FROM FaceRecords WHERE Timestamp LIKE ? GROUP BY day",
+        (f"{prefix}%",)
+    )
+    records_by_day = {int(row['day']): row['cnt'] for row in cur.fetchall()}
+    
+    # Query Incidents
+    # First make sure table exists
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS Incidents (
+            IncidentID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Name TEXT,
+            Status TEXT NOT NULL,
+            Description TEXT,
+            Timestamp TEXT
+        )
+    """)
+    cur.execute(
+        "SELECT substr(Timestamp, 9, 2) as day, COUNT(*) as cnt "
+        "FROM Incidents WHERE Timestamp LIKE ? GROUP BY day",
+        (f"{prefix}%",)
+    )
+    incidents_by_day = {int(row['day']): row['cnt'] for row in cur.fetchall()}
+    
+    conn.close()
+    
+    # Merge stats
+    stats = {}
+    for day in range(1, 32):
+        stats[day] = {
+            'detections': records_by_day.get(day, 0),
+            'incidents': incidents_by_day.get(day, 0)
+        }
+    return stats

@@ -1,0 +1,362 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FaceTech - Detection Calendar</title>
+  <link rel="stylesheet" href="{% static 'css/records.css' %}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.3.0/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    .calendar-container {
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 3fr 1.2fr;
+      gap: 24px;
+      height: calc(100vh - 100px);
+      overflow: hidden;
+    }
+    .calendar-card {
+      background: var(--card-bg);
+      border: 1px solid #1a202c;
+      border-radius: var(--border-radius);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+    }
+    .calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .month-nav-btn {
+      background: #1e2538;
+      border: 1px solid #2d3748;
+      color: var(--text-light);
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .month-nav-btn:hover {
+      background: #2d3748;
+    }
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+      flex: 1;
+    }
+    .weekday-header {
+      text-align: center;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.85rem;
+      padding: 10px 0;
+      border-bottom: 2px solid #2d3748;
+      text-transform: uppercase;
+    }
+    .calendar-day {
+      background: #151926;
+      border: 1px solid #1e2538;
+      border-radius: 6px;
+      padding: 10px;
+      min-height: 85px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .calendar-day:hover {
+      border-color: var(--blue);
+      background: #1c2236;
+    }
+    .calendar-day.empty {
+      background: transparent;
+      border: none;
+      cursor: default;
+    }
+    .calendar-day.active {
+      border-color: var(--blue);
+      box-shadow: 0 0 8px rgba(45, 183, 245, 0.3);
+    }
+    .day-number {
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--text-light);
+      align-self: flex-start;
+    }
+    .day-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .stat-badge {
+      font-size: 0.75rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      text-align: center;
+    }
+    .stat-badge.detections {
+      background: rgba(45, 183, 245, 0.15);
+      color: var(--blue);
+    }
+    .stat-badge.incidents {
+      background: rgba(245, 78, 66, 0.15);
+      color: var(--negative);
+    }
+    .details-card {
+      background: var(--card-bg);
+      border: 1px solid #1a202c;
+      border-radius: var(--border-radius);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .details-header {
+      border-bottom: 1px solid #2d3748;
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+    .details-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-light);
+    }
+    .details-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      flex: 1;
+    }
+    .detail-item {
+      background: #151926;
+      border: 1px solid #1e2538;
+      border-radius: 6px;
+      padding: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: transform 0.2s;
+    }
+    .detail-item:hover {
+      transform: translateX(4px);
+    }
+    .detail-left {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .detail-name {
+      font-weight: 600;
+      color: var(--text-light);
+    }
+    .detail-time {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .detail-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+    .detail-status {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .detail-status.recognized {
+      color: var(--positive);
+    }
+    .detail-status.unknown {
+      color: var(--negative);
+    }
+    .detail-conf {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .no-details-msg {
+      color: var(--text-muted);
+      text-align: center;
+      margin-top: 40px;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo">
+      <i class="bi bi-person-bounding-box logo-icon"></i>
+      <span class="logo-text">FaceTech</span>
+    </div>
+    <nav class="nav-menu">
+      <a href="{% url 'home' %}" class="nav-item">
+        <i class="bi bi-eye nav-icon"></i>
+        <span class="nav-text">Monitoring</span>
+      </a>
+      <a href="{% url 'add_people' %}" class="nav-item">
+        <i class="bi bi-people-fill nav-icon"></i>
+        <span class="nav-text">People Database</span>
+      </a>
+      <a href="{% url 'records' %}" class="nav-item">
+        <i class="bi bi-person-badge nav-icon"></i>
+        <span class="nav-text">Face Records</span>
+      </a>
+      <a href="{% url 'view_incidents' %}" class="nav-item">
+        <i class="bi bi-exclamation-triangle nav-icon"></i>
+        <span class="nav-text">Incidents</span>
+      </a>
+      <a href="{% url 'search' %}" class="nav-item">
+        <i class="bi bi-search nav-icon"></i>
+        <span class="nav-text">Search</span>
+      </a>
+      <a href="{% url 'calendar' %}" class="nav-item active">
+        <i class="bi bi-calendar-date nav-icon"></i>
+        <span class="nav-text">Calendar</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <span>System active</span>
+      <div class="progress-bar"><div class="progress"></div></div>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="header">
+      <div>
+        <h1>Activity Calendar</h1>
+        <p class="subtitle">Review historic facial recognition logs by date</p>
+      </div>
+      <div class="header-right">
+        <div class="status">
+          <span>System Status: <strong>Active</strong></span>
+          <small>Last update: Just now</small>
+        </div>
+        <div class="profile-icon">
+          <i class="bi bi-person-circle"></i>
+        </div>
+      </div>
+    </header>
+
+    <div class="calendar-container">
+      <div class="calendar-card">
+        <div class="calendar-header">
+          <h2>{{ month_name }} {{ year }}</h2>
+          <div style="display: flex; gap: 8px;">
+            <a href="?year={{ prev_year }}&month={{ prev_month }}" class="month-nav-btn">
+              <i class="bi bi-chevron-left"></i> Previous
+            </a>
+            <a href="?year={{ next_year }}&month={{ next_month }}" class="month-nav-btn">
+              Next <i class="bi bi-chevron-right"></i>
+            </a>
+          </div>
+        </div>
+
+        <div class="calendar-grid">
+          <!-- Weekday Headers -->
+          <div class="weekday-header">Sun</div>
+          <div class="weekday-header">Mon</div>
+          <div class="weekday-header">Tue</div>
+          <div class="weekday-header">Wed</div>
+          <div class="weekday-header">Thu</div>
+          <div class="weekday-header">Fri</div>
+          <div class="weekday-header">Sat</div>
+
+          <!-- Calendar Days -->
+          {% for week in weeks %}
+            {% for day_info in week %}
+              {% if not day_info.day %}
+                <div class="calendar-day empty"></div>
+              {% else %}
+                <div class="calendar-day" data-date="{{ year }}-{{ month|stringformat:'02d' }}-{{ day_info.day|stringformat:'02d' }}" onclick="loadDateDetails(this)">
+                  <span class="day-number">{{ day_info.day }}</span>
+                  <div class="day-stats">
+                    {% if day_info.detections > 0 %}
+                      <span class="stat-badge detections">{{ day_info.detections }} Detections</span>
+                    {% endif %}
+                    {% if day_info.incidents > 0 %}
+                      <span class="stat-badge incidents">{{ day_info.incidents }} Incidents</span>
+                    {% endif %}
+                  </div>
+                </div>
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="details-card">
+        <div class="details-header">
+          <div class="details-title" id="selected-date-title">Date Activity Log</div>
+        </div>
+        <div class="details-list" id="activity-details">
+          <div class="no-details-msg">Select any day on the calendar to load tracking records.</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let activeDayElement = null;
+
+    async function loadDateDetails(element) {
+      if (activeDayElement) {
+        activeDayElement.classList.remove('active');
+      }
+      element.classList.add('active');
+      activeDayElement = element;
+
+      const dateStr = element.getAttribute('data-date');
+      const titleEl = document.getElementById('selected-date-title');
+      const detailsContainer = document.getElementById('activity-details');
+
+      titleEl.textContent = `Activity: ${dateStr}`;
+      detailsContainer.innerHTML = '<div class="no-details-msg"><i class="fa fa-spinner fa-spin"></i> Loading...</div>';
+
+      try {
+        const response = await fetch(`/api/calendar-details?date=${dateStr}`);
+        const data = await response.json();
+
+        if (data.success && data.records.length > 0) {
+          detailsContainer.innerHTML = '';
+          data.records.forEach(rec => {
+            const item = document.createElement('div');
+            item.className = 'detail-item';
+            
+            const isRecognized = rec.status.toLowerCase() === 'recognized';
+            const statusClass = isRecognized ? 'recognized' : 'unknown';
+            
+            item.innerHTML = `
+              <div class="detail-left">
+                <span class="detail-name">${rec.name}</span>
+                <span class="detail-time"><i class="bi bi-clock"></i> ${rec.time}</span>
+              </div>
+              <div class="detail-right">
+                <span class="detail-status ${statusClass}">${rec.status}</span>
+                <span class="detail-conf">${rec.confidence_pct}% Match</span>
+              </div>
+            `;
+            detailsContainer.appendChild(item);
+          });
+        } else {
+          detailsContainer.innerHTML = '<div class="no-details-msg">No face recognition logs recorded on this date.</div>';
+        }
+      } catch (error) {
+        console.error('Failed to load calendar details:', error);
+        detailsContainer.innerHTML = '<div class="no-details-msg">Error loading activity data.</div>';
+      }
+    }
+  </script>
+</body>
+</html>

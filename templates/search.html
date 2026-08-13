@@ -1,0 +1,269 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FaceTech - Database &amp; Record Search</title>
+  <link rel="stylesheet" href="{% static 'css/records.css' %}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.3.0/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    .search-container {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      height: calc(100vh - 100px);
+      overflow-y: auto;
+    }
+    .search-filter-card {
+      background: var(--card-bg);
+      border: 1px solid #1a202c;
+      border-radius: var(--border-radius);
+      padding: 20px;
+    }
+    .filter-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1.2fr 1.2fr auto;
+      gap: 16px;
+      align-items: flex-end;
+    }
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .filter-group label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .filter-input {
+      background: #1e2538;
+      border: 1px solid #2d3748;
+      color: var(--text-light);
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      width: 100%;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .filter-input:focus {
+      border-color: var(--blue);
+    }
+    .btn-search {
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: opacity 0.2s, box-shadow 0.2s;
+      height: 42px;
+    }
+    .btn-search:hover {
+      opacity: 0.9;
+      box-shadow: 0 0 10px rgba(45, 183, 245, 0.4);
+    }
+    .results-table-card {
+      background: var(--card-bg);
+      border: 1px solid #1a202c;
+      border-radius: var(--border-radius);
+      padding: 20px;
+      flex: 1;
+    }
+    .table-container {
+      overflow-x: auto;
+      margin-top: 16px;
+    }
+    .search-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+    .search-table th {
+      padding: 12px 16px;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.85rem;
+      border-bottom: 2px solid #2d3748;
+      text-transform: uppercase;
+    }
+    .search-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid #1e2538;
+      font-size: 0.95rem;
+    }
+    .search-table tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 50px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .status-recognized {
+      background: rgba(60, 215, 125, 0.15);
+      color: var(--positive);
+    }
+    .status-unknown {
+      background: rgba(245, 78, 66, 0.15);
+      color: var(--negative);
+    }
+    .status-entering {
+      background: rgba(45, 183, 245, 0.15);
+      color: var(--blue);
+    }
+    .no-results {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+    }
+    .no-results i {
+      font-size: 3rem;
+      margin-bottom: 16px;
+      color: #2c3245;
+    }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo">
+      <i class="bi bi-person-bounding-box logo-icon"></i>
+      <span class="logo-text">FaceTech</span>
+    </div>
+    <nav class="nav-menu">
+      <a href="{% url 'home' %}" class="nav-item">
+        <i class="bi bi-eye nav-icon"></i>
+        <span class="nav-text">Monitoring</span>
+      </a>
+      <a href="{% url 'add_people' %}" class="nav-item">
+        <i class="bi bi-people-fill nav-icon"></i>
+        <span class="nav-text">People Database</span>
+      </a>
+      <a href="{% url 'records' %}" class="nav-item">
+        <i class="bi bi-person-badge nav-icon"></i>
+        <span class="nav-text">Face Records</span>
+      </a>
+      <a href="{% url 'view_incidents' %}" class="nav-item">
+        <i class="bi bi-exclamation-triangle nav-icon"></i>
+        <span class="nav-text">Incidents</span>
+      </a>
+      <a href="{% url 'search' %}" class="nav-item active">
+        <i class="bi bi-search nav-icon"></i>
+        <span class="nav-text">Search</span>
+      </a>
+      <a href="{% url 'calendar' %}" class="nav-item">
+        <i class="bi bi-calendar-date nav-icon"></i>
+        <span class="nav-text">Calendar</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <span>System active</span>
+      <div class="progress-bar"><div class="progress"></div></div>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="header">
+      <div>
+        <h1>Search Center</h1>
+        <p class="subtitle">Search, filter, and export tracking records</p>
+      </div>
+      <div class="header-right">
+        <div class="status">
+          <span>System Status: <strong>Active</strong></span>
+          <small>Last update: Just now</small>
+        </div>
+        <div class="profile-icon">
+          <i class="bi bi-person-circle"></i>
+        </div>
+      </div>
+    </header>
+
+    <div class="search-container">
+      <div class="search-filter-card">
+        <form method="GET" action="{% url 'search' %}" class="filter-grid">
+          <div class="filter-group">
+            <label for="q">Search Name</label>
+            <input type="text" id="q" name="q" value="{{ query_q }}" placeholder="Enter name or ID..." class="filter-input" />
+          </div>
+          <div class="filter-group">
+            <label for="status">Status</label>
+            <select id="status" name="status" class="filter-input">
+              <option value="all" {% if query_status == "all" %}selected{% endif %}>All Statuses</option>
+              <option value="recognized" {% if query_status == "recognized" %}selected{% endif %}>Recognized</option>
+              <option value="unknown" {% if query_status == "unknown" %}selected{% endif %}>Unknown</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="start_date">Start Date</label>
+            <input type="date" id="start_date" name="start_date" value="{{ query_start_date }}" class="filter-input" />
+          </div>
+          <div class="filter-group">
+            <label for="end_date">End Date</label>
+            <input type="date" id="end_date" name="end_date" value="{{ query_end_date }}" class="filter-input" />
+          </div>
+          <button type="submit" class="btn-search">
+            <i class="bi bi-search"></i> Search
+          </button>
+        </form>
+      </div>
+
+      <div class="results-table-card">
+        <h3>Search Results</h3>
+        <div class="table-container">
+          {% if records %}
+            <table class="search-table">
+              <thead>
+                <tr>
+                  <th>Ref ID</th>
+                  <th>Name</th>
+                  <th>Status</th>
+                  <th>Confidence</th>
+                  <th>Timestamp</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for record in records %}
+                  <tr>
+                    <td><strong>{{ record.reference_id }}</strong></td>
+                    <td>{{ record.Name }}</td>
+                    <td>
+                      <span class="status-badge status-{{ record.Status }}">
+                        {% if record.Status == "recognized" %}
+                          <i class="bi bi-shield-check"></i>
+                        {% else %}
+                          <i class="bi bi-shield-exclamation"></i>
+                        {% endif %}
+                        {{ record.Status|capfirst }}
+                      </span>
+                    </td>
+                    <td>{{ record.confidence_pct }}%</td>
+                    <td>{{ record.Timestamp }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div class="no-results">
+              <i class="bi bi-folder2-open"></i>
+              <p>No matching records found. Refine your filters and try again.</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
