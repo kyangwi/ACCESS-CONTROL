@@ -7,14 +7,28 @@ const fileInput        = document.getElementById('photos');
 const previewContainer = document.getElementById('preview');
 const countDisplay     = document.getElementById('current-count');
 const actionBtns       = document.getElementById('action-buttons');
+const saveBtn          = document.getElementById('save-btn');
 const trainBtn         = document.getElementById('train-btn');
 const toastEl          = document.getElementById('toast');
+const trainingOverlay  = document.getElementById('training-overlay');
+const addPeopleForm    = document.getElementById('add-people-form');
+
+// Webcam Element refs
+const startWebcamBtn   = document.getElementById('start-webcam-btn');
+const snapBtn          = document.getElementById('snap-btn');
+const enrollVideo      = document.getElementById('enroll-video');
+const webcamOverlay    = document.getElementById('webcam-overlay');
+
+let webcamStream       = null;
+let capturedFilesList  = []; // Stores files captured via webcam
 
 // --- Helpers ---
 function showToast(msg, type='info'){
   toastEl.className = `toast show toast-${type}`;
   toastEl.textContent = msg;
-  setTimeout(()=> toastEl.className = 'toast', 3000);
+  setTimeout(()=> {
+    toastEl.classList.remove('show');
+  }, 4000);
 }
 
 function updateCount(total){
@@ -35,13 +49,19 @@ function updateButtons(total){
   }
 }
 
-function renderPreviews(files){
+// Render preview from fileInput + captured snapshots
+function renderAllPreviews() {
   previewContainer.innerHTML = '';
-  files.forEach(file=>{
+  
+  // Render files from file input
+  const inputFiles = Array.from(fileInput.files);
+  const allFiles = [...inputFiles, ...capturedFilesList];
+
+  allFiles.forEach(file => {
     const reader = new FileReader();
-    reader.onload = e=>{
+    reader.onload = e => {
       const img = document.createElement('img');
-      img.src   = e.target.result;
+      img.src = e.target.result;
       img.classList.add('thumb');
       previewContainer.appendChild(img);
     };
@@ -51,16 +71,16 @@ function renderPreviews(files){
 
 // --- Event handlers ---
 function onFilesChange(){
-  const files = Array.from(fileInput.files);
-  const total = existingCount + files.length;
+  const totalFilesCount = fileInput.files.length + capturedFilesList.length;
+  const total = existingCount + totalFilesCount;
 
-  if(total < minRequired){
+  if (total < minRequired) {
     showToast(`Need ${minRequired - total} more image(s) to train.`, 'warning');
   }
 
   updateCount(total);
   updateButtons(total);
-  renderPreviews(files);
+  renderAllPreviews();
 }
 
 function bindDragDrop(){
@@ -82,8 +102,78 @@ function bindDragDrop(){
   );
 }
 
-// --- Initialization ---
+// --- Webcam capture logic ---
+async function startWebcam() {
+  try {
+    webcamStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480, facingMode: 'user' }
+    });
+    enrollVideo.srcObject = webcamStream;
+    webcamOverlay.style.display = 'none';
+    snapBtn.style.display = 'inline-flex';
+    startWebcamBtn.innerHTML = '<i class="bi bi-stop-fill"></i> Stop Camera';
+    showToast('Webcam started successfully. Align your face in center.', 'success');
+  } catch (error) {
+    console.error('Error starting webcam:', error);
+    showToast('Could not access camera device.', 'danger');
+  }
+}
 
+function stopWebcam() {
+  if (webcamStream) {
+    webcamStream.getTracks().forEach(track => track.stop());
+    enrollVideo.srcObject = null;
+    webcamStream = null;
+  }
+  webcamOverlay.style.display = 'flex';
+  snapBtn.style.display = 'none';
+  startWebcamBtn.innerHTML = '<i class="bi bi-play-fill"></i> Start Camera';
+}
+
+function captureSnapshot() {
+  if (!webcamStream) return;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = enrollVideo.videoWidth || 640;
+  canvas.height = enrollVideo.videoHeight || 480;
+  const ctx = canvas.getContext('2d');
+  
+  // Mirror frame to match the mirrored display preview
+  ctx.translate(canvas.width, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(enrollVideo, 0, 0, canvas.width, canvas.height);
+  
+  canvas.toBlob(blob => {
+    const filename = `snapshot_${Date.now()}.jpg`;
+    const file = new File([blob], filename, { type: 'image/jpeg' });
+    
+    // Add file to captured list
+    capturedFilesList.push(file);
+    showToast('Captured snapshot added to upload list.', 'success');
+    
+    // Synchronize to standard fileInput using DataTransfer API so it submits via Django Form
+    syncFilesToInput();
+    onFilesChange();
+  }, 'image/jpeg', 0.95);
+}
+
+function syncFilesToInput() {
+  const dataTransfer = new DataTransfer();
+  
+  // Stage existing files from file input
+  Array.from(fileInput.files).forEach(f => {
+    dataTransfer.items.add(f);
+  });
+  
+  // Stage captured webcam files
+  capturedFilesList.forEach(f => {
+    dataTransfer.items.add(f);
+  });
+  
+  fileInput.files = dataTransfer.files;
+}
+
+// --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
   updateCount(existingCount);
   updateButtons(existingCount);
@@ -92,7 +182,26 @@ document.addEventListener('DOMContentLoaded', () => {
   fileInput.addEventListener('change', onFilesChange);
   bindDragDrop();
 
-  // Show server-side flash messages
+  // Webcam button events
+  startWebcamBtn.addEventListener('click', () => {
+    if (webcamStream) {
+      stopWebcam();
+    } else {
+      startWebcam();
+    }
+  });
+
+  snapBtn.addEventListener('click', captureSnapshot);
+
+  // Form submit -> Show biometric loader when retraining is triggered
+  addPeopleForm.addEventListener('submit', (e) => {
+    const submitBtn = e.submitter;
+    if (submitBtn && submitBtn.value === 'train') {
+      trainingOverlay.style.display = 'flex';
+    }
+  });
+
+  // Show server-side Django flash messages
   document.querySelectorAll('.flash-messages .alert').forEach(el => {
     const type = el.classList.contains('alert-danger') ? 'danger' :
                  el.classList.contains('alert-success') ? 'success' :
@@ -101,15 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-
-
-
-
-
-
-//
-
-
+// --- Registered Users List logic ---
 const peopleListEl = document.getElementById('peopleList');
 const totalUsersEl = document.getElementById('totalUsers');
 const totalUsersTextEl = document.getElementById('totalUsersText');
@@ -117,7 +218,6 @@ const searchInput = document.getElementById('searchInput');
 
 let people = [];
 
-// Fetch people list from the API
 function fetchPeople() {
   fetch('/api/people')
     .then(res => res.json())
@@ -127,13 +227,19 @@ function fetchPeople() {
     })
     .catch(err => {
       console.error('Failed to fetch people:', err);
-      peopleListEl.innerHTML = '<p class="error">Failed to load people data.</p>';
+      peopleListEl.innerHTML = '<p class="error">Failed to load people database.</p>';
     });
 }
 
-// Render filtered people list
 function renderPeople(list) {
   peopleListEl.innerHTML = '';
+  if (list.length === 0) {
+    peopleListEl.innerHTML = '<p class="no-details-msg">No registered personnel found.</p>';
+    totalUsersEl.textContent = 0;
+    totalUsersTextEl.textContent = 0;
+    return;
+  }
+
   list.forEach(person => {
     const card = document.createElement('div');
     card.className = 'person-card';
@@ -147,7 +253,8 @@ function renderPeople(list) {
 
     const btn = document.createElement('button');
     btn.className = 'delete-btn';
-    btn.innerHTML = `<i class="fa-solid fa-trash-can"></i> Delete User`;
+    btn.type = 'button';
+    btn.innerHTML = `<i class="fa-solid fa-trash-can"></i> Delete`;
     btn.addEventListener('click', () => deleteUser(person.id));
 
     details.append(info, btn);
@@ -165,31 +272,27 @@ function renderPeople(list) {
   totalUsersTextEl.textContent = list.length;
 }
 
-// Apply search filter
 function applyFilters() {
   const q = searchInput.value.toLowerCase();
   const filtered = people.filter(p => p.name.toLowerCase().includes(q));
   renderPeople(filtered);
 }
 
-// Handle user deletion
 function deleteUser(id) {
-  if (confirm(`Delete user "${id}"? This action cannot be undone.`)) {
+  if (confirm(`Are you sure you want to delete user "${id}"? All enrolled face photos will be permanently deleted.`)) {
     fetch(`/api/people/${encodeURIComponent(id)}`, {
       method: 'DELETE'
     })
       .then(res => {
         if (res.ok) {
+          showToast(`Deleted user "${id}" successfully.`, 'success');
           fetchPeople();
         } else {
-          alert('Failed to delete user');
+          showToast('Failed to delete user.', 'danger');
         }
       });
   }
 }
 
-// Event listeners
 searchInput.addEventListener('input', applyFilters);
-
-// Initialize
 fetchPeople();
