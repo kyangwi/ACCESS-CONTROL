@@ -59,17 +59,38 @@ class CameraSystem {
             console.log(`CameraSystem[${this.cameraIndex}] reusing shared local video stream`);
             this.stream = sharedMediaStream;
             this.video.srcObject = this.stream;
-            await new Promise((resolve, reject) => {
-                const onLoadedMeta = () => {
-                    this.updateCanvasDimensions();
-                    resolve();
-                };
-                const onError = (event) => {
-                    reject(new Error('Unable to reuse shared local camera stream.'));
-                };
-                this.video.addEventListener('loadedmetadata', onLoadedMeta, { once: true });
-                this.video.addEventListener('error', onError, { once: true });
-            });
+            
+            // Try to trigger video play immediately
+            this.video.play().catch(e => console.warn('Play failed on reused stream:', e));
+
+            if (this.video.readyState >= 1) { // HAVE_METADATA or higher
+                this.updateCanvasDimensions();
+            } else {
+                await new Promise((resolve, reject) => {
+                    let resolved = false;
+                    const onLoadedMeta = () => {
+                        if (resolved) return;
+                        resolved = true;
+                        this.updateCanvasDimensions();
+                        resolve();
+                    };
+                    const onError = (event) => {
+                        if (resolved) return;
+                        resolved = true;
+                        reject(new Error('Unable to reuse shared local camera stream.'));
+                    };
+                    this.video.addEventListener('loadedmetadata', onLoadedMeta, { once: true });
+                    this.video.addEventListener('error', onError, { once: true });
+                    // Safety timeout of 2 seconds
+                    setTimeout(() => {
+                        if (resolved) return;
+                        resolved = true;
+                        console.warn(`CameraSystem[${this.cameraIndex}] shared stream metadata load timeout fallback`);
+                        this.updateCanvasDimensions();
+                        resolve();
+                    }, 2000);
+                });
+            }
             return;
         }
 
@@ -141,19 +162,38 @@ class CameraSystem {
         sharedMediaStream = this.stream;
 
         this.video.srcObject = this.stream;
-        await new Promise((resolve, reject) => {
-            const onLoadedMeta = () => {
-                this.updateCanvasDimensions();
-                resolve();
-            };
-            const onError = (event) => {
-                const err = new Error('Unable to access local camera. Check permissions and device availability.');
-                try { console.error(`CameraSystem[${this.cameraIndex}] getUserMedia error:`, event); } catch (e) {}
-                reject(err);
-            };
-            this.video.addEventListener('loadedmetadata', onLoadedMeta, { once: true });
-            this.video.addEventListener('error', onError, { once: true });
-        });
+        this.video.play().catch(e => console.warn('Play failed on fresh stream:', e));
+
+        if (this.video.readyState >= 1) {
+            this.updateCanvasDimensions();
+        } else {
+            await new Promise((resolve, reject) => {
+                let resolved = false;
+                const onLoadedMeta = () => {
+                    if (resolved) return;
+                    resolved = true;
+                    this.updateCanvasDimensions();
+                    resolve();
+                };
+                const onError = (event) => {
+                    if (resolved) return;
+                    resolved = true;
+                    const err = new Error('Unable to access local camera. Check permissions and device availability.');
+                    try { console.error(`CameraSystem[${this.cameraIndex}] getUserMedia error:`, event); } catch (e) {}
+                    reject(err);
+                };
+                this.video.addEventListener('loadedmetadata', onLoadedMeta, { once: true });
+                this.video.addEventListener('error', onError, { once: true });
+                // Safety timeout of 2 seconds
+                setTimeout(() => {
+                    if (resolved) return;
+                    resolved = true;
+                    console.warn(`CameraSystem[${this.cameraIndex}] fresh stream metadata load timeout fallback`);
+                    this.updateCanvasDimensions();
+                    resolve();
+                }, 2000);
+            });
+        }
     }
 
     async setupVideoSource() {
@@ -175,18 +215,38 @@ class CameraSystem {
         this.video.playsInline = true;
         this.video.src = this.sourceUrl;
 
-        await new Promise((resolve, reject) => {
-            const onLoadedMeta = () => {
-                this.updateCanvasDimensions();
-                resolve();
-            };
-            const onError = () => {
-                reject(new Error(`Unable to load video source: ${this.sourceUrl}`));
-            };
-            this.video.addEventListener('loadedmetadata', onLoadedMeta, { once: true });
-            this.video.addEventListener('error', onError, { once: true });
-            this.video.load();
-        });
+        // Try to trigger video play immediately
+        this.video.play().catch(e => console.warn('Play failed on video source:', e));
+
+        if (this.video.readyState >= 1) {
+            this.updateCanvasDimensions();
+        } else {
+            await new Promise((resolve, reject) => {
+                let resolved = false;
+                const onLoadedMeta = () => {
+                    if (resolved) return;
+                    resolved = true;
+                    this.updateCanvasDimensions();
+                    resolve();
+                };
+                const onError = () => {
+                    if (resolved) return;
+                    resolved = true;
+                    reject(new Error(`Unable to load video source: ${this.sourceUrl}`));
+                };
+                this.video.addEventListener('loadedmetadata', onLoadedMeta, { once: true });
+                this.video.addEventListener('error', onError, { once: true });
+                // Safety timeout of 2 seconds
+                setTimeout(() => {
+                    if (resolved) return;
+                    resolved = true;
+                    console.warn(`CameraSystem[${this.cameraIndex}] remote stream metadata load timeout fallback`);
+                    this.updateCanvasDimensions();
+                    resolve();
+                }, 2000);
+                this.video.load();
+            });
+        }
     }
 
     setupEventListeners() {
@@ -378,15 +438,21 @@ class CameraSystem {
     }
 
     updateCanvasDimensions() {
-        if (!this.video.videoWidth || !this.video.videoHeight) return;
-
-        const videoRatio = this.video.videoWidth / this.video.videoHeight;
+        const videoWidth = this.video.videoWidth || 640;
+        const videoHeight = this.video.videoHeight || 480;
+        const videoRatio = videoWidth / videoHeight;
         const container = this.video.parentElement;
 
         if (!container) return;
 
-        const containerWidth = container.clientWidth;
-        const containerHeight = container.clientHeight;
+        let containerWidth = container.clientWidth;
+        let containerHeight = container.clientHeight;
+
+        // Fall back to video size if container is collapsed or not rendered yet
+        if (!containerWidth || !containerHeight) {
+            containerWidth = videoWidth;
+            containerHeight = videoHeight;
+        }
 
         let width, height;
         if (containerWidth / containerHeight > videoRatio) {
@@ -396,6 +462,10 @@ class CameraSystem {
             width = containerWidth;
             height = width / videoRatio;
         }
+
+        // Guarantee a minimum display dimension
+        width = Math.max(width, 320);
+        height = Math.max(height, 180);
 
         this.canvas.width = width;
         this.canvas.height = height;
