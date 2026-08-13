@@ -1,0 +1,10 @@
+/FaceRecognitionModels/
+/FaceRecon/facereconenv/
+.venv/
+__pycache__/
+*.pyc
+instance/
+catboost_info/
+*.log
+.vscode/
+.idea/

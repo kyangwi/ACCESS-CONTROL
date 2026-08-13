@@ -1,0 +1,14 @@
+# GPU-enabled runtime must be installed before InsightFace for CUDA execution
+onnxruntime-gpu==1.19.2
+insightface==0.7.3
+onnx
+catboost==1.2.8
+opencv-python
+numpy
+pandas
+tqdm
+scipy
+scikit-learn
+django
+django-cors-headers
+werkzeug
