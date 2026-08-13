@@ -185,8 +185,8 @@ def get_people(request):
             continue
         images = [f for f in os.listdir(person_dir) if allowed_file(f)]
         if images:
-            avatar_path = f'/static/facedata/{name}/{images[0]}'
-            all_avatars = [f'/static/facedata/{name}/{img}' for img in images]
+            avatar_path = f'/facedata/{name}/{images[0]}'
+            all_avatars = [f'/facedata/{name}/{img}' for img in images]
             people.append({
                 'id': name,
                 'name': name,

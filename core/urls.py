@@ -13,5 +13,5 @@ urlpatterns = [
     path('getdata/', views.get_data, name='get_data'),
     path('api/people', views.get_people, name='get_people'),
     path('api/people/<str:name>', views.delete_person, name='delete_person'),
-    path('static/facedata/<path:filename>', views.serve_facedata, name='serve_facedata'),
+    path('facedata/<path:filename>', views.serve_facedata, name='serve_facedata'),
 ]

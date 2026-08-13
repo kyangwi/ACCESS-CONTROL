@@ -105,9 +105,20 @@ function bindDragDrop(){
 // --- Webcam capture logic ---
 async function startWebcam() {
   try {
-    webcamStream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 640, height: 480, facingMode: 'user' }
-    });
+    // Try to get stream with ideal constraints first
+    try {
+      webcamStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: 'user'
+        }
+      });
+    } catch (constraintErr) {
+      console.warn('Webcam ideal constraints failed, falling back to simple video: true', constraintErr);
+      webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    }
+
     enrollVideo.srcObject = webcamStream;
     webcamOverlay.style.display = 'none';
     snapBtn.style.display = 'inline-flex';
@@ -115,7 +126,17 @@ async function startWebcam() {
     showToast('Webcam started successfully. Align your face in center.', 'success');
   } catch (error) {
     console.error('Error starting webcam:', error);
-    showToast('Could not access camera device.', 'danger');
+    let errorMsg = 'Could not access camera device.';
+    
+    if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+      errorMsg = 'Camera is in use by another tab or app (e.g. the Monitoring page). Please stop other streams and try again.';
+    } else if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+      errorMsg = 'Camera access denied. Please grant permission in your browser address bar.';
+    } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+      errorMsg = 'No camera device found on your system.';
+    }
+    
+    showToast(errorMsg, 'danger');
   }
 }
 
