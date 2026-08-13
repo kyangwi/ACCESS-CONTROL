@@ -574,18 +574,18 @@ body {
 }
 
 .badge.unauthorized {
-    background: #e74c3c;
-    color: white;
+    background: rgba(245, 78, 66, 0.15);
+    color: var(--negative);
 }
 
 .badge.suspicious {
-    background: #f1c40f;
-    color: #333;
+    background: rgba(245, 166, 35, 0.15);
+    color: var(--neutral);
 }
 
 .badge.denied {
-    background: #95a5a6;
-    color: white;
+    background: rgba(122, 138, 153, 0.15);
+    color: var(--text-muted);
 }
 
 .incident-description {
@@ -609,8 +609,8 @@ body {
 /* meta (right) */
 .incident-meta
 
-.badge.unauthorized { background: #f8d7da; color: #842029; }
-.badge.suspicious   { background: #fff3cd; color: #664d03; }
+.badge.unauthorized { background: rgba(245, 78, 66, 0.15); color: var(--negative); }
+.badge.suspicious   { background: rgba(245, 166, 35, 0.15); color: var(--neutral); }
 
 /* ==================================================
    RECORDS SESSION
@@ -819,10 +819,10 @@ th, td {
   font-weight: 600;
   white-space: nowrap;
 }
-.status-badge.recognized { background: #d1e7dd; color: #159c5d; }
-.status-badge.unknown    { background: #f8d7da; color: #e32736; }
-.status-badge.entering   { background: #cff4fc; color: #1c97af; }
-.status-badge.exiting    { background: #e2e3e5; color: #41464b; }
+.status-badge.recognized { background: rgba(60, 215, 125, 0.15); color: var(--positive); }
+.status-badge.unknown    { background: rgba(245, 78, 66, 0.15); color: var(--negative); }
+.status-badge.entering   { background: rgba(45, 183, 245, 0.15); color: var(--blue); }
+.status-badge.exiting    { background: rgba(122, 138, 153, 0.15); color: var(--text-muted); }
 
 /* Progress Bars */
 .progress-bar {
@@ -1024,8 +1024,8 @@ th, td {
 .incident-card.unauthorized { border-left: 4px solid #dc3545; }
 .incident-card.suspicious   { border-left: 4px solid #ffc107; }
 
-.badge.unauthorized { background: #f8d7da; color: #842029; }
-.badge.suspicious   { background: #fff3cd; color: #664d03; }
+.badge.unauthorized { background: rgba(245, 78, 66, 0.15); color: var(--negative); }
+.badge.suspicious   { background: rgba(245, 166, 35, 0.15); color: var(--neutral); }
 
 /* EMPTY STATE */
 .empty-state {
