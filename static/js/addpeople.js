@@ -262,6 +262,53 @@ function fetchPeople() {
     });
 }
 
+// --- Auto Role / Access Selection ---
+const roleSelect = document.getElementById('role');
+const accessSelect = document.getElementById('access_level');
+
+if (roleSelect && accessSelect) {
+  roleSelect.addEventListener('change', () => {
+    if (roleSelect.value === 'Guest') {
+      accessSelect.value = 'Restricted Access';
+    } else if (roleSelect.value === 'Employee' || roleSelect.value === 'VIP') {
+      accessSelect.value = 'Full Access';
+    }
+  });
+}
+
+function getRoleBadgeClass(role) {
+  switch ((role || '').toLowerCase()) {
+    case 'guest': return 'badge-guest';
+    case 'vip': return 'badge-vip';
+    case 'contractor': return 'badge-role';
+    default: return 'badge-role';
+  }
+}
+
+function getAccessBadgeClass(access) {
+  switch ((access || '').toLowerCase()) {
+    case 'full access': return 'badge-full-access';
+    case 'restricted access': return 'badge-restricted-access';
+    case 'blocked': return 'badge-blocked';
+    default: return 'badge-full-access';
+  }
+}
+
+// --- Profile Modal Elements & Logic ---
+const profileModal        = document.getElementById('profileModal');
+const closeProfileModal   = document.getElementById('closeProfileModal');
+const modalAvatarImg      = document.getElementById('modalAvatarImg');
+const modalPersonName     = document.getElementById('modalPersonName');
+const modalBadges         = document.getElementById('modalBadges');
+const modalRoleSelect     = document.getElementById('modalRoleSelect');
+const modalAccessSelect   = document.getElementById('modalAccessSelect');
+const modalSaveBtn        = document.getElementById('modalSaveBtn');
+const modalDeleteBtn      = document.getElementById('modalDeleteBtn');
+const modalPhotoCount     = document.getElementById('modalPhotoCount');
+const modalGalleryGrid    = document.getElementById('modalGalleryGrid');
+
+let activePerson = null;
+
 function renderPeople(list) {
   peopleListEl.innerHTML = '';
   if (list.length === 0) {
@@ -273,7 +320,8 @@ function renderPeople(list) {
 
   list.forEach(person => {
     const card = document.createElement('div');
-    card.className = 'person-card';
+    card.className = 'person-card clickable-card';
+    card.title = `Click to view ${person.name}'s dedicated profile`;
 
     const details = document.createElement('div');
     details.className = 'person-details';
@@ -282,29 +330,35 @@ function renderPeople(list) {
     info.className = 'person-info';
     info.innerHTML = `<i class="fa-solid fa-user"></i><div class="name">${person.name}</div>`;
 
-    const btn = document.createElement('button');
-    btn.className = 'delete-btn';
-    btn.type = 'button';
-    btn.innerHTML = `<i class="fa-solid fa-trash-can"></i> Delete`;
-    btn.addEventListener('click', () => deleteUser(person.id));
+    const badges = document.createElement('div');
+    badges.className = 'person-badges';
+    badges.innerHTML = `
+      <span class="badge ${getRoleBadgeClass(person.role)}"><i class="bi bi-person-badge"></i> ${person.role || 'Employee'}</span>
+      <span class="badge ${getAccessBadgeClass(person.access_level)}"><i class="bi bi-shield-lock"></i> ${person.access_level || 'Full Access'}</span>
+    `;
 
-    details.append(info, btn);
-
+    details.append(info, badges);
     card.append(details);
 
-    // Render gallery of all pictures for this person on the right
-    if (person.all_avatars && person.all_avatars.length > 0) {
-      const gallery = document.createElement('div');
-      gallery.className = 'person-images-gallery';
-      person.all_avatars.forEach(url => {
-        const img = document.createElement('img');
-        img.className = 'person-gallery-thumb';
-        img.src = url;
-        img.alt = person.name;
-        gallery.appendChild(img);
-      });
-      card.appendChild(gallery);
+    // Render single InsightFace face picture on the rightmost corner of the card
+    const avatarWrapper = document.createElement('div');
+    avatarWrapper.className = 'person-avatar-wrapper';
+    if (person.avatar) {
+      const img = document.createElement('img');
+      img.className = 'person-single-face';
+      img.src = person.avatar;
+      img.alt = person.name;
+      avatarWrapper.appendChild(img);
+    } else {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'person-single-face placeholder-face';
+      placeholder.innerHTML = '<i class="bi bi-person-fill"></i>';
+      avatarWrapper.appendChild(placeholder);
     }
+    card.appendChild(avatarWrapper);
+
+    // Open dedicated profile on click
+    card.addEventListener('click', () => openPersonProfile(person));
 
     peopleListEl.append(card);
   });
@@ -313,26 +367,240 @@ function renderPeople(list) {
   totalUsersTextEl.textContent = list.length;
 }
 
+// --- Modal Elements ---
+const modalAddPhotosInput = document.getElementById('modalAddPhotosInput');
+
+function openPersonProfile(person) {
+  activePerson = person;
+
+  if (modalAvatarImg) {
+    modalAvatarImg.src = person.avatar || '';
+  }
+  if (modalPersonName) {
+    modalPersonName.textContent = person.name;
+  }
+  if (modalBadges) {
+    modalBadges.innerHTML = `
+      <span class="badge ${getRoleBadgeClass(person.role)}"><i class="bi bi-person-badge"></i> ${person.role || 'Employee'}</span>
+      <span class="badge ${getAccessBadgeClass(person.access_level)}"><i class="bi bi-shield-lock"></i> ${person.access_level || 'Full Access'}</span>
+    `;
+  }
+  if (modalRoleSelect) {
+    modalRoleSelect.value = person.role || 'Employee';
+  }
+  if (modalAccessSelect) {
+    modalAccessSelect.value = person.access_level || 'Full Access';
+  }
+
+  renderModalGalleryGrid();
+
+  if (profileModal) {
+    profileModal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function renderModalGalleryGrid() {
+  if (!activePerson || !modalGalleryGrid || !modalPhotoCount) return;
+
+  modalGalleryGrid.innerHTML = '';
+  const photos = activePerson.all_avatars || [];
+  modalPhotoCount.textContent = photos.length;
+
+  if (photos.length === 0) {
+    modalGalleryGrid.innerHTML = '<p class="text-muted" style="grid-column: 1/-1; padding: 12px 0;">No enrolled photos remaining.</p>';
+    return;
+  }
+
+  photos.forEach(imgUrl => {
+    const item = document.createElement('div');
+    item.className = 'profile-gallery-item';
+
+    const img = document.createElement('img');
+    img.src = imgUrl;
+    img.alt = activePerson.name;
+    img.addEventListener('click', () => window.open(imgUrl, '_blank'));
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'gallery-delete-btn';
+    delBtn.type = 'button';
+    delBtn.title = 'Delete photo';
+    delBtn.innerHTML = '<i class="bi bi-trash-fill"></i>';
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteSinglePhoto(activePerson.name, imgUrl);
+    });
+
+    item.append(img, delBtn);
+    modalGalleryGrid.appendChild(item);
+  });
+}
+
+function deleteSinglePhoto(name, imgUrl) {
+  if (!confirm('Are you sure you want to delete this photo?')) return;
+
+  const filename = imgUrl.split('/').pop();
+
+  fetch('/api/people/delete-photo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name, filename: filename })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        showToast('Photo deleted successfully.', 'success');
+        if (activePerson) {
+          activePerson.all_avatars = data.all_avatars;
+          activePerson.avatar = data.avatar;
+          if (modalAvatarImg) modalAvatarImg.src = data.avatar || '';
+          renderModalGalleryGrid();
+        }
+        fetchPeople();
+      } else {
+        showToast('Failed to delete photo: ' + (data.error || ''), 'danger');
+      }
+    })
+    .catch(err => showToast('Error deleting photo: ' + err, 'danger'));
+}
+
+if (modalAddPhotosInput) {
+  modalAddPhotosInput.addEventListener('change', (e) => {
+    if (!activePerson || !e.target.files.length) return;
+
+    const formData = new FormData();
+    formData.append('name', activePerson.name);
+    Array.from(e.target.files).forEach(file => {
+      formData.append('photos', file);
+    });
+
+    fetch('/api/people/upload-photos', {
+      method: 'POST',
+      body: formData
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          showToast(`Uploaded ${data.saved} new photo(s) for ${activePerson.name}.`, 'success');
+          if (activePerson) {
+            activePerson.all_avatars = data.all_avatars;
+            activePerson.avatar = data.avatar;
+            if (modalAvatarImg) modalAvatarImg.src = data.avatar || '';
+            renderModalGalleryGrid();
+          }
+          fetchPeople();
+        } else {
+          showToast('Failed to upload photos: ' + (data.error || ''), 'danger');
+        }
+        // Reset file input value
+        modalAddPhotosInput.value = '';
+      })
+      .catch(err => {
+        showToast('Upload error: ' + err, 'danger');
+        modalAddPhotosInput.value = '';
+      });
+  });
+}
+
+function closePersonProfileModal() {
+  if (profileModal) {
+    profileModal.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+  activePerson = null;
+}
+
+// Modal Event Listeners
+if (closeProfileModal) {
+  closeProfileModal.addEventListener('click', closePersonProfileModal);
+}
+
+if (profileModal) {
+  profileModal.addEventListener('click', (e) => {
+    if (e.target === profileModal) {
+      closePersonProfileModal();
+    }
+  });
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && profileModal && profileModal.style.display === 'flex') {
+    closePersonProfileModal();
+  }
+});
+
+// Auto-switch access level when role is changed in modal
+if (modalRoleSelect && modalAccessSelect) {
+  modalRoleSelect.addEventListener('change', () => {
+    if (modalRoleSelect.value === 'Guest') {
+      modalAccessSelect.value = 'Restricted Access';
+    } else if (modalRoleSelect.value === 'Employee' || modalRoleSelect.value === 'VIP') {
+      modalAccessSelect.value = 'Full Access';
+    }
+  });
+}
+
+if (modalSaveBtn) {
+  modalSaveBtn.addEventListener('click', () => {
+    if (!activePerson) return;
+    const newRole = modalRoleSelect.value;
+    const newAccess = modalAccessSelect.value;
+
+    fetch('/api/people/update-access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: activePerson.name,
+        role: newRole,
+        access_level: newAccess
+      })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          showToast(`Updated access details for ${activePerson.name}.`, 'success');
+          activePerson.role = newRole;
+          activePerson.access_level = newAccess;
+          if (modalBadges) {
+            modalBadges.innerHTML = `
+              <span class="badge ${getRoleBadgeClass(newRole)}"><i class="bi bi-person-badge"></i> ${newRole}</span>
+              <span class="badge ${getAccessBadgeClass(newAccess)}"><i class="bi bi-shield-lock"></i> ${newAccess}</span>
+            `;
+          }
+          fetchPeople();
+        } else {
+          showToast('Failed to update details: ' + (data.error || ''), 'danger');
+        }
+      })
+      .catch(err => showToast('Update error: ' + err, 'danger'));
+  });
+}
+
+if (modalDeleteBtn) {
+  modalDeleteBtn.addEventListener('click', () => {
+    if (!activePerson) return;
+    if (confirm(`Are you sure you want to permanently delete user "${activePerson.name}" and all enrolled photos?`)) {
+      fetch(`/api/people/${encodeURIComponent(activePerson.name)}`, {
+        method: 'DELETE'
+      })
+        .then(res => {
+          if (res.ok) {
+            showToast(`Deleted user "${activePerson.name}" successfully.`, 'success');
+            closePersonProfileModal();
+            fetchPeople();
+          } else {
+            showToast('Failed to delete user.', 'danger');
+          }
+        })
+        .catch(err => showToast('Delete error: ' + err, 'danger'));
+    }
+  });
+}
+
 function applyFilters() {
   const q = searchInput.value.toLowerCase();
   const filtered = people.filter(p => p.name.toLowerCase().includes(q));
   renderPeople(filtered);
-}
-
-function deleteUser(id) {
-  if (confirm(`Are you sure you want to delete user "${id}"? All enrolled face photos will be permanently deleted.`)) {
-    fetch(`/api/people/${encodeURIComponent(id)}`, {
-      method: 'DELETE'
-    })
-      .then(res => {
-        if (res.ok) {
-          showToast(`Deleted user "${id}" successfully.`, 'success');
-          fetchPeople();
-        } else {
-          showToast('Failed to delete user.', 'danger');
-        }
-      });
-  }
 }
 
 searchInput.addEventListener('input', applyFilters);

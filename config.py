@@ -15,7 +15,7 @@ FEATURIZER_PATH = os.path.join(MODEL_DIR, "centroid_featurizer.pkl")  # Feature 
 PCA_MODEL_PATH = os.path.join(MODEL_DIR, "pca.pkl")
 
 # Confidence threshold
-CONFIDENCE_THRESHOLD = 0.45
+CONFIDENCE_THRESHOLD = 0.6
 
 # Status colors (BGR format for OpenCV)
 STATUS_COLORS = {

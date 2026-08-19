@@ -27,6 +27,10 @@ from database import (
     get_all_incidents,
     search_records,
     get_calendar_stats,
+    save_or_update_person,
+    get_person_by_name,
+    get_all_persons_dict,
+    delete_person_record,
 )
 
 # ---------------------------------------------------------------------------
@@ -174,10 +178,58 @@ def records_page(request):
         return HttpResponse(f"Server Error: {e}", status=500)
 
 
+def extract_insightface_crop(name, person_dir):
+    """Uses InsightFace face detection to crop and save a single face portrait thumbnail."""
+    crop_filename = 'face_crop.jpg'
+    crop_path = os.path.join(person_dir, crop_filename)
+
+    if os.path.exists(crop_path):
+        return f'/facedata/{name}/{crop_filename}'
+
+    images = [f for f in os.listdir(person_dir) if allowed_file(f) and f != crop_filename]
+    if not images:
+        return None
+
+    analyzer, _, _, _ = _get_ml_components()
+
+    if analyzer is not None:
+        for img_name in images:
+            img_path = os.path.join(person_dir, img_name)
+            img = cv2.imread(img_path)
+            if img is None:
+                continue
+
+            faces = analyzer.analyze(img)
+            if faces:
+                # Pick face with largest area
+                best_face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
+                x1, y1, x2, y2 = [int(v) for v in best_face.bbox]
+                h, w = img.shape[:2]
+
+                bw, bh = x2 - x1, y2 - y1
+                pad_x = int(bw * 0.25)
+                pad_y = int(bh * 0.25)
+
+                crop_x1 = max(0, x1 - pad_x)
+                crop_y1 = max(0, y1 - pad_y)
+                crop_x2 = min(w, x2 + pad_x)
+                crop_y2 = min(h, y2 + pad_y)
+
+                cropped_face = img[crop_y1:crop_y2, crop_x1:crop_x2]
+                if cropped_face.size > 0:
+                    cv2.imwrite(crop_path, cropped_face)
+                    return f'/facedata/{name}/{crop_filename}'
+
+    # Fallback to first raw image if crop fails
+    return f'/facedata/{name}/{images[0]}'
+
+
 def get_people(request):
     people = []
     if not os.path.exists(DATASET_DIR):
         return JsonResponse([], safe=False)
+
+    persons_db = get_all_persons_dict()
 
     for name in os.listdir(DATASET_DIR):
         person_dir = os.path.join(DATASET_DIR, name)
@@ -185,13 +237,28 @@ def get_people(request):
             continue
         images = [f for f in os.listdir(person_dir) if allowed_file(f)]
         if images:
-            avatar_path = f'/facedata/{name}/{images[0]}'
-            all_avatars = [f'/facedata/{name}/{img}' for img in images]
+            avatar_path = extract_insightface_crop(name, person_dir)
+            all_avatars = [f'/facedata/{name}/{img}' for img in images if img != 'face_crop.jpg']
+            
+            p_meta = persons_db.get(name)
+            if not p_meta:
+                role = 'Employee'
+                access_level = 'Full Access'
+                notes = ''
+                save_or_update_person(name, role, access_level, notes)
+            else:
+                role = p_meta.get('Role', 'Employee')
+                access_level = p_meta.get('AccessLevel', 'Full Access')
+                notes = p_meta.get('Notes', '')
+
             people.append({
                 'id': name,
                 'name': name,
+                'role': role,
+                'access_level': access_level,
+                'notes': notes,
                 'avatar': avatar_path,
-                'all_avatars': all_avatars
+                'all_avatars': all_avatars,
             })
 
     return JsonResponse(people, safe=False)
@@ -213,20 +280,133 @@ def delete_person(request, name):
     if os.path.exists(person_dir):
         try:
             shutil.rmtree(person_dir)
+            delete_person_record(name)
+            delete_person_record(secure_filename(name))
             return JsonResponse({'success': True})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
     return JsonResponse({'success': False, 'error': 'Person not found'}, status=404)
 
 
+@csrf_exempt
+def update_person_access(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+    try:
+        data = json.loads(request.body)
+        name = data.get('name', '').strip()
+        role = data.get('role', 'Employee').strip()
+        access_level = data.get('access_level', 'Full Access').strip()
+        notes = data.get('notes', '').strip()
+
+        if not name:
+            return JsonResponse({'success': False, 'error': 'Missing person name'}, status=400)
+
+        save_or_update_person(name, role, access_level, notes)
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@csrf_exempt
+def delete_person_photo(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+    try:
+        data = json.loads(request.body)
+        name = data.get('name', '').strip()
+        filename = data.get('filename', '').strip()
+
+        if not name or not filename:
+            return JsonResponse({'success': False, 'error': 'Missing name or filename'}, status=400)
+
+        filename = os.path.basename(filename)
+        person_dir = os.path.join(DATASET_DIR, secure_filename(name))
+        file_path = os.path.join(person_dir, secure_filename(filename))
+
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        crop_path = os.path.join(person_dir, 'face_crop.jpg')
+        if os.path.exists(crop_path):
+            os.remove(crop_path)
+
+        remaining_images = [f for f in os.listdir(person_dir) if allowed_file(f) and f != 'face_crop.jpg'] if os.path.exists(person_dir) else []
+        new_avatar = extract_insightface_crop(name, person_dir) if remaining_images else None
+        all_avatars = [f'/facedata/{name}/{img}' for img in remaining_images]
+
+        return JsonResponse({
+            'success': True,
+            'remaining_count': len(remaining_images),
+            'avatar': new_avatar,
+            'all_avatars': all_avatars
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@csrf_exempt
+def upload_person_photos(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+    try:
+        name = request.POST.get('name', '').strip()
+        if not name:
+            return JsonResponse({'success': False, 'error': 'Missing person name'}, status=400)
+
+        person_dir = os.path.join(DATASET_DIR, secure_filename(name))
+        os.makedirs(person_dir, exist_ok=True)
+
+        files = request.FILES.getlist('photos')
+        if not files:
+            return JsonResponse({'success': False, 'error': 'No photo files selected'}, status=400)
+
+        saved = 0
+        for f in files:
+            if allowed_file(f.name):
+                filepath = os.path.join(person_dir, secure_filename(f.name))
+                with open(filepath, 'wb+') as dest:
+                    for chunk in f.chunks():
+                        dest.write(chunk)
+                saved += 1
+
+        crop_path = os.path.join(person_dir, 'face_crop.jpg')
+        if os.path.exists(crop_path):
+            os.remove(crop_path)
+
+        remaining_images = [f for f in os.listdir(person_dir) if allowed_file(f) and f != 'face_crop.jpg']
+        new_avatar = extract_insightface_crop(name, person_dir)
+        all_avatars = [f'/facedata/{name}/{img}' for img in remaining_images]
+
+        return JsonResponse({
+            'success': True,
+            'saved': saved,
+            'avatar': new_avatar,
+            'all_avatars': all_avatars
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
 def add_people(request):
     name = ''
+    role = 'Employee'
+    access_level = 'Full Access'
+    notes = ''
     existing_count = 0
 
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
+        role = request.POST.get('role', 'Employee').strip()
+        access_level = request.POST.get('access_level', 'Full Access').strip()
+        notes = request.POST.get('notes', '').strip()
     else:
         name = request.GET.get('name', '').strip()
+        if name:
+            p_info = get_person_by_name(name)
+            role = p_info.get('Role', 'Employee')
+            access_level = p_info.get('AccessLevel', 'Full Access')
+            notes = p_info.get('Notes', '')
 
     if name:
         person_dir = os.path.join(DATASET_DIR, secure_filename(name))
@@ -239,6 +419,9 @@ def add_people(request):
     if request.method == 'POST':
         files = request.FILES.getlist('photos')
         action = request.POST.get('action')
+
+        if name:
+            save_or_update_person(name, role, access_level, notes)
 
         if action == 'train':
             if name:
@@ -255,6 +438,9 @@ def add_people(request):
                         saved += 1
 
                 if saved:
+                    crop_path = os.path.join(person_dir, 'face_crop.jpg')
+                    if os.path.exists(crop_path):
+                        os.remove(crop_path)
                     messages.success(request, f'Saved {saved} new photo(s) for {name}.')
 
             try:
@@ -275,8 +461,9 @@ def add_people(request):
             return redirect(request.path + f'?name={name}')
 
         if not files:
-            messages.error(request, 'Select at least one photo')
-            return redirect(request.path + f'?name={name}')
+            # If no new files uploaded but saving info
+            messages.success(request, f'Updated access details for {name}.')
+            return redirect(f'/addpeople?name={name}')
 
         person_dir = os.path.join(DATASET_DIR, secure_filename(name))
         os.makedirs(person_dir, exist_ok=True)
@@ -291,7 +478,7 @@ def add_people(request):
                 saved += 1
 
         total_images = existing_count + saved
-        messages.success(request, f'Saved {saved} photos. Total: {total_images}')
+        messages.success(request, f'Saved {saved} photos for {name} ({role} - {access_level}). Total: {total_images}')
 
         return redirect(f'/addpeople?name={name}')
 
@@ -299,6 +486,9 @@ def add_people(request):
         'MIN_IMAGES_REQUIRED': MIN_IMAGES_REQUIRED,
         'existing_count': existing_count,
         'name': name,
+        'role': role,
+        'access_level': access_level,
+        'notes': notes,
     })
 
 
@@ -439,6 +629,8 @@ def get_data(request):
     results = []
     active_tracks = set()
 
+    persons_db = get_all_persons_dict()
+
     from config import STATUS_COLORS
     from utils import rgb_to_hex
     for track in tracker.tracks:
@@ -499,13 +691,31 @@ def get_data(request):
             label = info['label']
             conf = info['confidence']
 
+        # Determine role and access level
+        role = 'Employee'
+        access_level = 'Full Access'
+        if label and label in persons_db:
+            role = persons_db[label].get('Role', 'Employee')
+            access_level = persons_db[label].get('AccessLevel', 'Full Access')
+
+        # Color coding based on status & access level
+        color = rgb_to_hex(STATUS_COLORS.get(status, (255, 255, 0)))
+        if status in ['recognized', 'recognized_permanent']:
+            if access_level == 'Blocked':
+                color = '#F54E42' # Red
+                save_incident(name=label, status='blocked_attempt', description=f'Blocked user {label} detected')
+            elif access_level == 'Restricted Access' or role == 'Guest':
+                color = '#F5A623' # Amber/Orange for Guest or Restricted Access
+
         results.append({
             'bbox': track.to_tlbr().tolist(),
             'status': status,
             'label': label,
+            'role': role,
+            'access_level': access_level,
             'confidence': conf,
             'timestamp': timestamp,
-            'color': rgb_to_hex(STATUS_COLORS.get(status, (255, 255, 0))),
+            'color': color,
             'track_id': track_id,
         })
 

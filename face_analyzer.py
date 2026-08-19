@@ -49,10 +49,13 @@ class FaceAnalyzer:
 
             self.app.prepare(ctx_id=ctx_id, det_size=(640, 640))
 
+            models = getattr(self.app, 'models', {})
             det_session = getattr(getattr(self.app, 'det_model', None), 'session', None)
-            rec_session = getattr(getattr(self.app, 'rec_model', None), 'session', None)
+            rec_session = getattr(models.get('recognition'), 'session', None)
             if det_session is None or rec_session is None:
-                logger.warning("InsightFace detection/recognition session was not initialized; continuing with CPU fallback if available")
+                logger.warning("InsightFace detection/recognition session was not initialized")
+            elif 'CUDAExecutionProvider' in det_session.get_providers() and 'CUDAExecutionProvider' in rec_session.get_providers():
+                logger.info("Detection and recognition sessions are using CUDA")
 
             logger.info(f"Face analyzer ready (running on {'GPU' if ctx_id == 0 else 'CPU'}).")
         except Exception as e:

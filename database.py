@@ -47,6 +47,21 @@ def init_db():
         """)
         conn.commit()
 
+    # Create Persons table if not exists
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Persons'")
+    if not cur.fetchone():
+        cur.execute("""
+            CREATE TABLE Persons (
+                PersonID INTEGER PRIMARY KEY AUTOINCREMENT,
+                Name TEXT UNIQUE NOT NULL,
+                Role TEXT NOT NULL DEFAULT 'Employee',
+                AccessLevel TEXT NOT NULL DEFAULT 'Full Access',
+                Notes TEXT,
+                CreatedAt TEXT
+            )
+        """)
+        conn.commit()
+
     conn.close()
 
 
@@ -268,3 +283,50 @@ def get_calendar_stats(year, month):
             'incidents': incidents_by_day.get(day, 0)
         }
     return stats
+
+
+def save_or_update_person(name, role='Employee', access_level='Full Access', notes=''):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    created_at = datetime.now().isoformat(sep=' ', timespec='seconds')
+    cur.execute(
+        """
+        INSERT INTO Persons (Name, Role, AccessLevel, Notes, CreatedAt)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(Name) DO UPDATE SET
+            Role=excluded.Role,
+            AccessLevel=excluded.AccessLevel,
+            Notes=excluded.Notes
+        """,
+        (name, role, access_level, notes, created_at)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_person_by_name(name):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT Name, Role, AccessLevel, Notes, CreatedAt FROM Persons WHERE Name = ?", (name,))
+    row = cur.fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+    return {'Name': name, 'Role': 'Employee', 'AccessLevel': 'Full Access', 'Notes': '', 'CreatedAt': ''}
+
+
+def get_all_persons_dict():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT Name, Role, AccessLevel, Notes, CreatedAt FROM Persons")
+    rows = cur.fetchall()
+    conn.close()
+    return {row['Name']: dict(row) for row in rows}
+
+
+def delete_person_record(name):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM Persons WHERE Name = ?", (name,))
+    conn.commit()
+    conn.close()

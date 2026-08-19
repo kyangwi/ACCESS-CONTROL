@@ -405,14 +405,15 @@ class CameraSystem {
                     );
 
                     // --- Text Label with Background ---
-
-                    const text = `${detection.label || 'Processing...'} ${Math.round(detection.confidence * 100)}%`;
-                    this.ctx.font = '20px Arial';
+                    const labelText = detection.label || 'Processing...';
+                    const roleAccessStr = (detection.role && detection.access_level) ? ` [${detection.role} - ${detection.access_level}]` : '';
+                    const text = `${labelText}${roleAccessStr} ${Math.round(detection.confidence * 100)}%`;
+                    this.ctx.font = '16px Arial';
 
                     // 1. Measure text dimensions
                     const textMetrics = this.ctx.measureText(text);
                     const textWidth = textMetrics.width;
-                    const textHeight = 20; // Approximate height based on font size
+                    const textHeight = 16; // Approximate height based on font size
                     const padding = 4;
 
                     // 2. Draw the background rectangle
@@ -561,6 +562,8 @@ function createDetectionEntry(detection, cameraIndex) {
         new Date(detection.timestamp).toLocaleTimeString() :
         new Date().toLocaleTimeString();
 
+    const roleTag = detection.role ? `<div style="font-size:0.75rem; color:#2db7f5; margin-top:2px;">${detection.role} &bull; ${detection.access_level || 'Full Access'}</div>` : '';
+
     const detectionItem = document.createElement('div');
     detectionItem.className = 'det-item';
     detectionItem.innerHTML = `
@@ -568,6 +571,7 @@ function createDetectionEntry(detection, cameraIndex) {
             <i class="fas fa-video det-icon"></i>
             <div>
                 <strong>${detection.label || 'Unknown'}</strong>
+                ${roleTag}
                 <small>Camera ${cameraIndex + 1} - ${timeStr}</small>
             </div>
         </div>
